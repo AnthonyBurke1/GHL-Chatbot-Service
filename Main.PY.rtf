@@ -1,0 +1,91 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 HelveticaNeue;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab560
+\pard\pardeftab560\slleading20\partightenfactor0
+
+\f0\fs26 \cf0 \
+\pard\pardeftab560\slleading20\pardirnatural\partightenfactor0
+\cf0 from flask import Flask, request, jsonify, render_template_string\
+import openai\
+from flask_cors import CORS\
+import os\
+import time\
+\
+app = Flask(__name__)\
+CORS(app)\
+\
+# Ensure API key is set correctly\
+oai_api_key = os.getenv("OPENAI_API_KEY")  # Fetch API key from environment variable\
+if not oai_api_key or "sk-" not in oai_api_key:\
+    raise ValueError("Invalid or missing OpenAI API Key. Ensure it is correctly set in environment variables.")\
+\
+# Initialize OpenAI client\
+client = openai.OpenAI(api_key=oai_api_key)\
+\
+@app.route("/")\
+def home():\
+    return render_template_string("""\
+        <!DOCTYPE html>\
+        <html lang="en">\
+        <head>\
+            <meta charset="UTF-8">\
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">\
+            <title>Chatbot</title>\
+            <script>\
+                async function sendMessage() \{\
+                    let userMessage = document.getElementById("userMessage").value;\
+                    let response = await fetch("/chat", \{\
+                        method: "POST",\
+                        headers: \{ "Content-Type": "application/json" \},\
+                        body: JSON.stringify(\{ message: userMessage \})\
+                    \});\
+                    let data = await response.json();\
+                    document.getElementById("chatbox").innerHTML += "<p><b>You:</b> " + userMessage + "</p>";\
+                    document.getElementById("chatbox").innerHTML += "<p><b>Bot:</b> " + data.reply + "</p>";\
+                    document.getElementById("userMessage").value = "";\
+                \}\
+            </script>\
+        </head>\
+        <body>\
+            <h1>Chatbot</h1>\
+            <div id="chatbox" style="border:1px solid #ccc; padding:10px; width:300px; height:300px; overflow:auto;"></div>\
+            <input type="text" id="userMessage" placeholder="Type a message">\
+            <button onclick="sendMessage()">Send</button>\
+        </body>\
+        </html>\
+    """)\
+\
+@app.route("/chat", methods=["POST"])\
+def chat():\
+    data = request.json\
+    user_message = data.get("message", "")\
+    \
+    try:\
+        thread = client.beta.threads.create()\
+        message = client.beta.threads.messages.create(\
+            thread_id=thread.id,\
+            role="user",\
+            content=user_message\
+        )\
+        run = client.beta.threads.runs.create(\
+            thread_id=thread.id,\
+            assistant_id="asst_eMIi3DOUXizxNsVS4pqt8thW"\
+        )\
+        \
+        # Wait for the run to complete\
+        while True:\
+            run_status = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)\
+            if run_status.status == "completed":\
+                break\
+            time.sleep(1)  # Avoid excessive polling\
+        \
+        messages = client.beta.threads.messages.list(thread_id=thread.id)\
+        bot_response = None\
+        for msg in messages.data[::-1]:  # Reverse to get latest message\
+            if msg.role == "assistant":\
+                bot_response = msg.content[0].text.value\
+                break\
+}
